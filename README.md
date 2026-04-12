@@ -1,26 +1,37 @@
 <p align="center">
-  <img src="assets/logo.png" alt="Claude Phone" width="200">
+  <img src="assets/logo.png" alt="OpenClaw Phone" width="200">
 </p>
 
-# Claude Phone
+# OpenClaw Phone
 
-Voice interface for Claude Code via SIP/3CX. Call your AI, and your AI can call you.
+Voice interface for OpenClaw via SIP/3CX. Call your AI, and your AI can call you.
+
+**Free alternative to Claude Phone** — uses Edge TTS and local Whisper instead of paid APIs.
 
 ## What is this?
 
-Claude Phone gives your Claude Code installation a phone number. You can:
+OpenClaw Phone gives your OpenClaw installation a phone number. You can:
 
-- **Inbound**: Call an extension and talk to Claude - run commands, check status, ask questions
+- **Inbound**: Call an extension and talk to OpenClaw - run commands, check status, ask questions
 - **Outbound**: Your server can call YOU with alerts, then have a conversation about what to do
+
+## What's Free?
+
+| Original (Paid) | OpenClaw Phone (Free) |
+|-----------------|--------------|
+| ElevenLabs ($) | Edge TTS (Microsoft, free) |
+| OpenAI Whisper ($) | Local faster-whisper (free) |
+| Claude Code (Claude Max) | OpenClaw (free, works with Ollama!) |
 
 ## Prerequisites
 
 | Requirement | Where to Get It | Notes |
 |-------------|-----------------|-------|
 | **3CX Cloud Account** | [3cx.com](https://www.3cx.com/) | Free tier works |
-| **ElevenLabs API Key** | [elevenlabs.io](https://elevenlabs.io/) | For text-to-speech |
-| **OpenAI API Key** | [platform.openai.com](https://platform.openai.com/) | For Whisper speech-to-text |
-| **Claude Code CLI** | [claude.ai/code](https://claude.ai/code) | Requires Claude Max subscription |
+| **OpenClaw** | [openclaw.ai](https://openclaw.ai/) | Free AI agent |
+| **Node.js 18+** | [nodejs.org](https://nodejs.org/) | |
+| **Python 3.10+** | [python.org](https://python.org/) | For faster-whisper |
+| **Podman** | [podman.io](https://podman.io/) | Docker alternative (free) |
 
 ## Platform Support
 
@@ -35,13 +46,14 @@ Claude Phone gives your Claude Code installation a phone number. You can:
 ### 1. Install
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/theNetworkChuck/claude-phone/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/investersam/openclaw-phone/main/install.sh | bash
 ```
 
 The installer will:
-- Check for Node.js 18+, Docker, and git (offers to install if missing)
-- Clone the repository to `~/.claude-phone-cli`
-- Install dependencies
+- Check for Node.js 18+, Podman, Python, and git (offers to install if missing)
+- Clone the repository to `~/openclaw-phone`
+- Install Python venv with faster-whisper
+- Install Node.js dependencies
 - Create the `claude-phone` command
 
 ### 2. Setup
@@ -54,21 +66,31 @@ The setup wizard asks what you're installing:
 
 | Type | Use Case | What It Configures |
 |------|----------|-------------------|
-| **Voice Server** | Pi or dedicated voice box | Docker containers, connects to remote API server |
-| **API Server** | Mac/Linux with Claude Code | Just the Claude API wrapper |
+| **Voice Server** | Pi or dedicated voice box | Podman containers, connects to remote API server |
+| **API Server** | Mac/Linux with OpenClaw | Just the OpenClaw API wrapper |
 | **Both** | All-in-one single machine | Everything on one box |
 
 ### 3. Start
 
 ```bash
-claude-phone start
+# Option A: Use the startup script
+./start-openclaw.sh
+
+# Option B: Manual start
+# Terminal 1: Start OpenClaw API server
+cd ~/openclaw-phone/openclaw-api-server
+node server.js
+
+# Terminal 2: Start voice containers
+cd ~/openclaw-phone
+podman-compose up -d
 ```
 
 ## Deployment Modes
 
 ### All-in-One (Single Machine)
 
-Best for: Mac or Linux server that's always on and has Claude Code installed.
+Best for: Mac or Linux server that's always on and has OpenClaw installed.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -83,8 +105,8 @@ Best for: Mac or Linux server that's always on and has Claude Code installed.
 │  ┌─────────────────────────────────────────────┐           │
 │  │     Single Server (Mac/Linux)                │           │
 │  │  ┌───────────┐    ┌───────────────────┐    │           │
-│  │  │ voice-app │ ←→ │ claude-api-server │    │           │
-│  │  │ (Docker)  │    │ (Claude Code CLI) │    │           │
+│  │  │ voice-app │ ←→ │ openclaw-api-srv  │    │           │
+│  │  │ (Docker)  │    │ (OpenClaw CLI)    │    │           │
 │  │  └───────────┘    └───────────────────┘    │           │
 │  └─────────────────────────────────────────────┘           │
 └─────────────────────────────────────────────────────────────┘
@@ -93,12 +115,12 @@ Best for: Mac or Linux server that's always on and has Claude Code installed.
 **Setup:**
 ```bash
 claude-phone setup    # Select "Both"
-claude-phone start    # Launches Docker + API server
+./start-openclaw.sh   # Launches containers + API server
 ```
 
 ### Split Mode (Pi + API Server)
 
-Best for: Dedicated Pi for voice services, Claude running on your main machine.
+Best for: Dedicated Pi for voice services, OpenClaw running on your main machine.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -112,8 +134,8 @@ Best for: Dedicated Pi for voice services, Claude running on your main machine.
 │         ↓                                                    │
 │  ┌─────────────┐         ┌─────────────────────┐           │
 │  │ Raspberry Pi │   ←→   │ Mac/Linux with      │           │
-│  │ (voice-app)  │  HTTP  │ Claude Code CLI     │           │
-│  └─────────────┘         │ (claude-api-server) │           │
+│  │ (voice-app)  │  HTTP  │ OpenClaw CLI        │           │
+│  └─────────────┘         │ (openclaw-api-srv)  │           │
 │                          └─────────────────────┘           │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -121,12 +143,12 @@ Best for: Dedicated Pi for voice services, Claude running on your main machine.
 **On your Pi (Voice Server):**
 ```bash
 claude-phone setup    # Select "Voice Server", enter API server IP when prompted
-claude-phone start    # Launches Docker containers
+claude-phone start    # Launches Podman containers
 ```
 
 **On your Mac/Linux (API Server):**
 ```bash
-claude-phone api-server    # Starts Claude API wrapper on port 3333
+claude-phone api-server    # Starts OpenClaw API wrapper on port 3333
 ```
 
 Note: On the API server machine, you don't need to run `claude-phone setup` first - the `api-server` command works standalone.
@@ -150,10 +172,10 @@ Note: On the API server machine, you don't need to run `claude-phone setup` firs
 | `claude-phone config reset` | Reset configuration |
 | `claude-phone backup` | Create configuration backup |
 | `claude-phone restore` | Restore from backup |
-| `claude-phone update` | Update Claude Phone |
+| `claude-phone update` | Update OpenClaw Phone |
 | `claude-phone uninstall` | Complete removal |
 
-## Device Personalities
+## Voice Personalities
 
 Each SIP extension can have its own identity with a unique name, voice, and personality prompt:
 
@@ -161,13 +183,25 @@ Each SIP extension can have its own identity with a unique name, voice, and pers
 claude-phone device add
 ```
 
-Example devices:
-- **Morpheus** (ext 9000) - General assistant
-- **Cephanie** (ext 9002) - Storage monitoring bot
+Example voices (all free Edge TTS):
+- **Guy** (ext 9000) - Male US voice
+- **Jenny** (ext 9001) - Female US voice
+- **Aria** (ext 9002) - Expressive female US voice
+- **Sara** (ext 9003) - Friendly female US voice
+- **Ryan** (ext 9004) - Male UK voice
+- **Sonia** (ext 9005) - Female UK voice
 
 ## API Endpoints
 
-The voice-app exposes these endpoints on port 3000:
+### OpenClaw API Server (port 3333)
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| POST | `/ask` | Send prompt to OpenClaw |
+| POST | `/end-session` | Clean up session for a call |
+| GET | `/health` | Health check |
+
+### Voice App (port 3000)
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
@@ -178,6 +212,21 @@ The voice-app exposes these endpoints on port 3000:
 | GET | `/api/devices` | List configured devices |
 
 See [Outbound API Reference](voice-app/README-OUTBOUND.md) for details.
+
+## Testing
+
+```bash
+# Test OpenClaw API server
+curl -X POST http://localhost:3333/ask \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "What time is it?", "callId": "test"}'
+
+# Test Edge TTS
+npx node-edge-tts -t "Hello!" -v en-US-GuyNeural -f /tmp/test.mp3
+
+# Test Whisper (if faster-whisper installed)
+python voice-app/whisper-transcribe.py /tmp/test.mp3 --language en
+```
 
 ## Troubleshooting
 
@@ -196,6 +245,7 @@ claude-phone logs      # View logs
 | Calls connect but no audio | Wrong external IP | Re-run `claude-phone setup`, verify LAN IP |
 | Extension not registering | 3CX SBC not running | Check 3CX admin panel |
 | "Sorry, something went wrong" | API server unreachable | Check `claude-phone status` |
+| Whisper not working | faster-whisper not installed | Run `pip install faster-whisper` |
 | Port conflict on startup | 3CX SBC using port 5060 | Setup auto-detects this; re-run setup |
 
 See [Troubleshooting Guide](docs/TROUBLESHOOTING.md) for more.
@@ -223,11 +273,15 @@ npm run lint:fix
 ## Documentation
 
 - [CLI Reference](cli/README.md) - Detailed CLI documentation
+- [Setup Guide](SETUP.md) - Free version setup instructions
 - [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues and solutions
 - [Outbound API](voice-app/README-OUTBOUND.md) - Outbound calling API reference
 - [Deployment](voice-app/DEPLOYMENT.md) - Production deployment guide
-- [Claude Code Skill](docs/CLAUDE-CODE-SKILL.md) - Build a "call me" skill for Claude Code
 
 ## License
 
 MIT
+
+## Credits
+
+Based on [NetworkChuck's Claude Phone](https://github.com/theNetworkChuck/claude-phone) — modified to work with OpenClaw and free services.
