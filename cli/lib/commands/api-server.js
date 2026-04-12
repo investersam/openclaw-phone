@@ -26,10 +26,10 @@ export async function apiServerCommand(options = {}) {
   }
 
   console.log(chalk.gray(`Starting API server on port ${port}...`));
-  console.log(chalk.gray('This wraps Claude Code CLI for Pi connections.\n'));
+  console.log(chalk.gray('This wraps OpenClaw CLI for Pi connections.\n'));
 
   const projectRoot = getProjectRoot();
-  const serverPath = path.join(projectRoot, 'claude-api-server', 'server.js');
+  const serverPath = path.join(projectRoot, 'openclaw-api-server', 'server.js');
 
   const spinner = ora('Starting server...').start();
 

@@ -1,20 +1,17 @@
 /**
- * ElevenLabs Text-to-Speech Service
- * Generates speech audio files and returns URLs for FreeSWITCH playback
+ * Edge TTS Text-to-Speech Service
+ * Generates speech audio files using Microsoft's Edge TTS (npx node-edge-tts)
+ * Free alternative to ElevenLabs
  */
 
-const axios = require('axios');
+const { execSync, exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const logger = require('./logger');
 
-const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
-const ELEVENLABS_API_URL = 'https://api.elevenlabs.io/v1';
-
-// Default voice IDs (can be customized)
-const DEFAULT_VOICE_ID = 'JAgnJveGGUh4qy4kh6dF'; // Morpheus voice
-const MODEL_ID = 'eleven_turbo_v2'; // Fast, low-latency model
+// Default voice for Edge TTS
+const DEFAULT_VOICE = 'en-US-GuyNeural';
 
 // Audio output directory (set via setAudioDir)
 let audioDir = path.join(__dirname, '../audio-temp');
@@ -46,92 +43,79 @@ function generateFilename(text) {
 }
 
 /**
- * Convert text to speech using ElevenLabs API
+ * Convert text to speech using Edge TTS via npx
  * @param {string} text - Text to convert to speech
- * @param {string} voiceId - ElevenLabs voice ID (optional)
+ * @param {string} voiceId - Edge TTS voice name (optional, defaults to DEFAULT_VOICE)
  * @returns {Promise<string>} HTTP URL to audio file
  */
-async function generateSpeech(text, voiceId = DEFAULT_VOICE_ID) {
+async function generateSpeech(text, voiceId = DEFAULT_VOICE) {
   const startTime = Date.now();
 
-  try {
-    if (!ELEVENLABS_API_KEY) {
-      throw new Error('ELEVENLABS_API_KEY environment variable not set');
-    }
+  return new Promise((resolve, reject) => {
+    try {
+      logger.info('Generating speech with Edge TTS', {
+        textLength: text.length,
+        voice: voiceId
+      });
 
-    logger.info('Generating speech with ElevenLabs', {
-      textLength: text.length,
-      voiceId,
-      model: MODEL_ID
-    });
+      // Generate filename
+      const filename = generateFilename(text);
+      const outputPath = path.join(audioDir, filename);
 
-    // Call ElevenLabs API
-    const response = await axios({
-      method: 'POST',
-      url: `${ELEVENLABS_API_URL}/text-to-speech/${voiceId}`,
-      headers: {
-        'Accept': 'audio/mpeg',
-        'Content-Type': 'application/json',
-        'xi-api-key': ELEVENLABS_API_KEY
-      },
-      data: {
-        text,
-        model_id: MODEL_ID,
-        voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.75,
-          style: 0.0,
-          use_speaker_boost: true
+      // Escape text for command line
+      const escapedText = text.replace(/"/g, '\\"');
+
+      // Build the command
+      const command = `npx node-edge-tts -t "${escapedText}" -v ${voiceId} -l en-US -f "${outputPath}"`;
+
+      exec(command, { timeout: 30000 }, (error, stdout, stderr) => {
+        if (error) {
+          const latency = Date.now() - startTime;
+          logger.error('Speech generation failed', {
+            error: error.message,
+            stderr: stderr,
+            latency,
+            textLength: text?.length
+          });
+          reject(new Error(`TTS generation failed: ${error.message}`));
+          return;
         }
-      },
-      responseType: 'arraybuffer'
-    });
 
-    // Generate filename and save audio
-    const filename = generateFilename(text);
-    const filepath = path.join(audioDir, filename);
+        // Check if file was created
+        if (!fs.existsSync(outputPath)) {
+          const latency = Date.now() - startTime;
+          logger.error('Speech generation failed - no output file', {
+            stderr: stderr,
+            latency
+          });
+          reject(new Error('TTS generation failed - no output file created'));
+          return;
+        }
 
-    fs.writeFileSync(filepath, response.data);
+        const latency = Date.now() - startTime;
+        const fileSize = fs.statSync(outputPath).size;
 
-    const latency = Date.now() - startTime;
-    const fileSize = response.data.length;
+        logger.info('Speech generation successful', {
+          filename,
+          fileSize,
+          latency,
+          textLength: text.length
+        });
 
-    logger.info('Speech generation successful', {
-      filename,
-      fileSize,
-      latency,
-      textLength: text.length
-    });
+        // Return HTTP URL
+        const audioUrl = `http://127.0.0.1:3000/audio-files/${filename}`;
+        resolve(audioUrl);
+      });
 
-    // Return HTTP URL (assumes audio-temp is served via HTTP)
-    // Format: http://localhost:PORT/audio/filename.mp3
-    // The HTTP server setup is handled elsewhere
-    const audioUrl = `http://127.0.0.1:3000/audio-files/${filename}`;
-
-    return audioUrl;
-
-  } catch (error) {
-    const latency = Date.now() - startTime;
-
-    logger.error('Speech generation failed', {
-      error: error.message,
-      latency,
-      textLength: text?.length,
-      responseStatus: error.response?.status,
-      responseData: error.response?.data?.toString()
-    });
-
-    // Handle specific errors
-    if (error.response?.status === 401) {
-      throw new Error('ElevenLabs API authentication failed - check API key');
-    } else if (error.response?.status === 429) {
-      throw new Error('ElevenLabs API rate limit exceeded');
-    } else if (error.response?.status === 400) {
-      throw new Error('Invalid request to ElevenLabs API');
+    } catch (error) {
+      const latency = Date.now() - startTime;
+      logger.error('Speech generation failed', {
+        error: error.message,
+        latency
+      });
+      reject(new Error(`TTS generation failed: ${error.message}`));
     }
-
-    throw new Error(`TTS generation failed: ${error.message}`);
-  }
+  });
 }
 
 /**
@@ -169,29 +153,20 @@ function cleanupOldFiles(maxAgeMs = 60 * 60 * 1000) {
 }
 
 /**
- * Get list of available ElevenLabs voices
- * @returns {Promise<Array>} Array of voice objects
+ * Get list of available Edge TTS voices
+ * Note: Edge TTS has a fixed set of voices - this returns the default
+ * @returns {Array} Array of voice objects
  */
 async function getAvailableVoices() {
-  try {
-    if (!ELEVENLABS_API_KEY) {
-      throw new Error('ELEVENLABS_API_KEY environment variable not set');
-    }
-
-    const response = await axios({
-      method: 'GET',
-      url: `${ELEVENLABS_API_URL}/voices`,
-      headers: {
-        'xi-api-key': ELEVENLABS_API_KEY
-      }
-    });
-
-    return response.data.voices;
-
-  } catch (error) {
-    logger.error('Failed to fetch available voices', { error: error.message });
-    throw error;
-  }
+  // Edge TTS has these common voices (and more)
+  return [
+    { id: 'en-US-GuyNeural', name: 'Guy', language: 'en-US' },
+    { id: 'en-US-JennyNeural', name: 'Jenny', language: 'en-US' },
+    { id: 'en-US-AriaNeural', name: 'Aria', language: 'en-US' },
+    { id: 'en-US-SaraNeural', name: 'Sara', language: 'en-US' },
+    { id: 'en-GB-RyanNeural', name: 'Ryan', language: 'en-GB' },
+    { id: 'en-GB-SoniaNeural', name: 'Sonia', language: 'en-GB' }
+  ];
 }
 
 // Initialize audio directory

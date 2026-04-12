@@ -1,0 +1,12 @@
+{
+  "name": "openclaw-api-server",
+  "version": "1.0.0",
+  "description": "OpenClaw API server for voice interface",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
