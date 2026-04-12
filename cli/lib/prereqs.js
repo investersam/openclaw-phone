@@ -7,8 +7,8 @@ import { checkCompose } from './prereqs/checks/compose.js';
 import { checkDisk } from './prereqs/checks/disk.js';
 import { checkNetwork } from './prereqs/checks/network.js';
 import { installNode } from './prereqs/installers/node.js';
+import { installPodman } from './prereqs/installers/podman.js';
 import { installDocker } from './prereqs/installers/docker.js';
-import { installDockerDesktop } from './prereqs/installers/docker-desktop.js';
 import { saveState, loadState, rollback } from './prereqs/utils/rollback.js';
 
 /**
@@ -167,9 +167,11 @@ async function offerAutoFix(results, platform) {
         break;
 
       case 'docker':
-        if (platform.os === 'darwin') {
-          fixResult = await installDockerDesktop(platform);
-        } else {
+        // Prefer Podman on all platforms
+        fixResult = await installPodman(platform);
+        if (!fixResult.success) {
+          // Fall back to Docker if Podman fails
+          console.log(chalk.yellow('\n⚠️  Podman installation failed, trying Docker...'));
           fixResult = await installDocker(platform);
         }
         break;

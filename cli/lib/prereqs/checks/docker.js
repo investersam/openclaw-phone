@@ -1,21 +1,38 @@
 import { execSync } from 'child_process';
 
 /**
- * Check Docker installation and daemon status
+ * Check Docker OR Podman installation and daemon status
  * @param {object} platform - Platform info from detectPlatform()
  * @returns {Promise<object>} Check result
  */
 export async function checkDocker(platform) {
-  // First check if docker command exists
-  const installed = checkDockerInstalled();
+  // Check for Podman first (preferred)
+  const podmanInstalled = checkPodmanInstalled();
+  if (podmanInstalled.success) {
+    const running = checkPodmanRunning();
+    if (running.success) {
+      return {
+        name: 'Podman',
+        passed: true,
+        version: podmanInstalled.version,
+        required: '>=4.0.0',
+        message: `Podman v${podmanInstalled.version} ✓`,
+        canAutoFix: false,
+        isPodman: true
+      };
+    }
+  }
 
-  if (!installed.success) {
+  // Fall back to Docker
+  const dockerInstalled = checkDockerInstalled();
+
+  if (!dockerInstalled.success) {
     return {
-      name: 'Docker',
+      name: 'Container Runtime',
       passed: false,
       version: null,
-      required: '>=20.0.0',
-      message: 'Docker not installed',
+      required: 'Podman or Docker',
+      message: 'Podman or Docker not installed',
       canAutoFix: true,
       error: 'not_installed'
     };
@@ -30,9 +47,9 @@ export async function checkDocker(platform) {
       return {
         name: 'Docker',
         passed: false,
-        version: installed.version,
+        version: dockerInstalled.version,
         required: '>=20.0.0',
-        message: 'Docker installed but permission denied (user not in docker group)',
+        message: 'Docker installed but permission denied',
         canAutoFix: true,
         error: 'permission_denied'
       };
@@ -43,7 +60,7 @@ export async function checkDocker(platform) {
       return {
         name: 'Docker',
         passed: false,
-        version: installed.version,
+        version: dockerInstalled.version,
         required: '>=20.0.0',
         message: 'Docker installed but daemon not running',
         canAutoFix: true,
@@ -54,7 +71,7 @@ export async function checkDocker(platform) {
     return {
       name: 'Docker',
       passed: false,
-      version: installed.version,
+      version: dockerInstalled.version,
       required: '>=20.0.0',
       message: 'Docker installed but daemon not running',
       canAutoFix: true,
@@ -66,11 +83,56 @@ export async function checkDocker(platform) {
   return {
     name: 'Docker',
     passed: true,
-    version: installed.version,
+    version: dockerInstalled.version,
     required: '>=20.0.0',
-    message: `Docker v${installed.version}`,
-    canAutoFix: false
+    message: `Docker v${dockerInstalled.version}`,
+    canAutoFix: false,
+    isPodman: false
   };
+}
+
+/**
+ * Check if Podman command is installed
+ * @returns {{success: boolean, version?: string}} Result with version if installed
+ */
+function checkPodmanInstalled() {
+  try {
+    const output = execSync('podman --version', {
+      encoding: 'utf-8',
+      stdio: 'pipe'
+    });
+
+    const version = parsePodmanVersion(output.trim());
+
+    return {
+      success: true,
+      version: version || 'unknown'
+    };
+  } catch (error) {
+    return {
+      success: false
+    };
+  }
+}
+
+/**
+ * Check if Podman machine is running
+ * @returns {{success: boolean, error?: string}} Result
+ */
+function checkPodmanRunning() {
+  try {
+    execSync('podman ps', {
+      encoding: 'utf-8',
+      stdio: 'pipe'
+    });
+
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: 'not_running'
+    };
+  }
 }
 
 /**
@@ -136,6 +198,22 @@ function checkDockerRunning() {
       error: 'unknown'
     };
   }
+}
+
+/**
+ * Parse Podman version from output
+ * @param {string} output - Podman version output
+ * @returns {string|null} Parsed version (e.g., "4.9.0")
+ */
+function parsePodmanVersion(output) {
+  // podman version 4.9.0
+  const match = output.match(/podman version ([\d.]+)/i);
+
+  if (match) {
+    return match[1];
+  }
+
+  return null;
 }
 
 /**

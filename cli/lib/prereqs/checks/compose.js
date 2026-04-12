@@ -1,7 +1,7 @@
 import { execSync } from 'child_process';
 
 /**
- * Check Docker Compose availability (plugin or standalone)
+ * Check Docker Compose or Podman Compose availability
  * @param {object} _platform - Platform info from detectPlatform()
  * @returns {Promise<object>} Check result
  */
@@ -9,7 +9,22 @@ export async function checkCompose(_platform) {
   const requiredVersion = '1.29.0'; // Minimum for standalone
   const requiredPluginVersion = '2.0.0'; // Minimum for plugin
 
-  // Try plugin first (preferred)
+  // Try podman-compose first (for Podman users)
+  const podmanResult = checkPodmanCompose();
+
+  if (podmanResult.success) {
+    return {
+      name: 'Podman Compose',
+      passed: true,
+      version: podmanResult.version,
+      variant: 'podman-compose',
+      required: '>=0.1.0',
+      message: `Podman Compose available`,
+      canAutoFix: false
+    };
+  }
+
+  // Try docker compose plugin (preferred for Docker)
   const pluginResult = checkComposePlugin();
 
   if (pluginResult.success) {
@@ -24,7 +39,7 @@ export async function checkCompose(_platform) {
       message: passed
         ? `Docker Compose v${pluginResult.version} (plugin)`
         : `Docker Compose v${pluginResult.version} (plugin, requires >=${requiredPluginVersion})`,
-      canAutoFix: false // Usually comes with Docker installation
+      canAutoFix: false
     };
   }
 
@@ -49,14 +64,48 @@ export async function checkCompose(_platform) {
 
   // Neither available
   return {
-    name: 'Docker Compose',
+    name: 'Compose',
     passed: false,
     version: null,
     variant: null,
-    required: `>=${requiredPluginVersion}`,
-    message: 'Docker Compose not available',
-    canAutoFix: false // Usually installed with Docker
+    required: `podman-compose or docker-compose >=${requiredPluginVersion}`,
+    message: 'Compose not available (podman-compose or docker-compose required)',
+    canAutoFix: false
   };
+}
+
+/**
+ * Check for podman-compose
+ * @returns {{success: boolean, version?: string}} Result
+ */
+function checkPodmanCompose() {
+  try {
+    const output = execSync('podman-compose --version', {
+      encoding: 'utf-8',
+      stdio: 'pipe'
+    });
+
+    return {
+      success: true,
+      version: 'available'
+    };
+  } catch (error) {
+    // Also check if podman compose (as a subcommand) works
+    try {
+      execSync('podman compose version', {
+        encoding: 'utf-8',
+        stdio: 'pipe'
+      });
+      return {
+        success: true,
+        version: 'available'
+      };
+    } catch (e) {
+      return {
+        success: false
+      };
+    }
+  }
 }
 
 /**

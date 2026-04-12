@@ -87,6 +87,11 @@ install_podman() {
       ;;
     brew)
       brew install podman
+      echo ""
+      echo "⚠️  Podman requires a VM on macOS"
+      echo "   Initializing Podman Machine..."
+      podman machine init || true
+      podman machine start || echo "   (If this fails, run: podman machine start)"
       ;;
     *)
       echo "✗ Cannot auto-install Podman"
@@ -120,9 +125,13 @@ install_docker() {
       sudo usermod -aG docker $USER
       ;;
     brew)
-      echo "📦 Docker Desktop required on macOS"
-      echo "  Install from: https://www.docker.com/products/docker-desktop"
-      read -p "Press Enter after installing Docker Desktop..."
+      echo "📦 Installing Podman instead of Docker Desktop..."
+      brew install podman
+      echo ""
+      echo "⚠️  Podman requires a VM on macOS"
+      echo "   Initializing Podman Machine..."
+      podman machine init || true
+      podman machine start || echo "   (If this fails, run: podman machine start)"
       ;;
     *)
       echo "✗ Cannot auto-install Docker"
@@ -241,22 +250,27 @@ else
   fi
 fi
 
-# Check for Podman or Docker (prefer Podman)
-if ! command -v podman &> /dev/null && ! command -v docker &> /dev/null; then
+# Check for Podman or Docker (STRONGLY prefer Podman - Docker Desktop is NOT needed)
+if command -v podman &> /dev/null; then
+  echo "✓ Podman installed"
+elif command -v docker &> /dev/null; then
+  echo "✓ Docker installed (Podman recommended)"
+else
   echo "✗ Container runtime not found"
+  echo ""
+  echo "Podman is recommended (Docker Desktop NOT needed)"
   read -p "  Install Podman? (Y/n) " -n 1 -r
   echo
   if [[ ! $REPLY =~ ^[Nn]$ ]]; then
     install_podman
+    if [ "$OS" = "Darwin" ]; then
+      echo ""
+      echo "⚠️  Podman Machine on macOS requires admin password"
+      echo "   You may be prompted for your password..."
+    fi
   else
-    echo "  Install Podman: https://podman.io/"
+    echo "  Install Podman: https://podman.io/getting-started/installation"
     exit 1
-  fi
-else
-  if command -v podman &> /dev/null; then
-    echo "✓ Podman installed"
-  else
-    echo "✓ Docker installed"
   fi
 fi
 

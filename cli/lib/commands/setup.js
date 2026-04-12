@@ -38,7 +38,7 @@ async function promptInstallationType(currentType = 'both') {
     default: currentType,
     choices: [
       {
-        name: 'Voice Server (Pi/Linux) - Handles calls, needs Docker',
+        name: 'Voice Server (Pi/Linux) - Handles calls, needs Podman',
         value: 'voice-server'
       },
       {
