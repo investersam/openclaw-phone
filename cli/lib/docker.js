@@ -8,25 +8,61 @@ import {
 } from './config.js';
 
 /**
- * Detect which docker compose command to use
- * Some systems have 'docker compose' (plugin), others have 'docker-compose' (standalone)
+ * Detect which container runtime to use (Podman preferred)
+ * @returns {{runtime: string, cmd: string, composeCmd: string, args: string[]}} Runtime info
+ */
+function getRuntime() {
+  // Check for Podman first (preferred)
+  try {
+    execSync('podman --version', { stdio: 'pipe' });
+    // Check if podman-compose exists
+    try {
+      execSync('podman-compose --version', { stdio: 'pipe' });
+      return { runtime: 'podman', cmd: 'podman', composeCmd: 'podman-compose', args: [] };
+    } catch (e) {
+      // Try 'podman compose'
+      try {
+        execSync('podman compose version', { stdio: 'pipe' });
+        return { runtime: 'podman', cmd: 'podman', composeCmd: 'podman', args: ['compose'] };
+      } catch (e2) {
+        // Default to podman-compose
+        return { runtime: 'podman', cmd: 'podman', composeCmd: 'podman-compose', args: [] };
+      }
+    }
+  } catch (e) {
+    // Fall back to Docker
+  }
+
+  // Check Docker
+  try {
+    execSync('docker --version', { stdio: 'pipe' });
+    
+    // Check for docker compose plugin
+    try {
+      execSync('docker compose version', { stdio: 'pipe' });
+      return { runtime: 'docker', cmd: 'docker', composeCmd: 'docker', args: ['compose'] };
+    } catch (e) {
+      // Fall back to docker-compose
+      try {
+        execSync('docker-compose --version', { stdio: 'pipe' });
+        return { runtime: 'docker', cmd: 'docker', composeCmd: 'docker-compose', args: [] };
+      } catch (e2) {
+        return { runtime: 'docker', cmd: 'docker', composeCmd: 'docker', args: ['compose'] };
+      }
+    }
+  } catch (e) {
+    // No runtime found
+    return { runtime: 'none', cmd: 'podman', composeCmd: 'podman-compose', args: [] };
+  }
+}
+
+/**
+ * Detect which docker compose command to use (DEPRECATED: use getRuntime)
  * @returns {{cmd: string, args: string[]}} Command and base args for compose
  */
 function getComposeCommand() {
-  // Try 'docker compose' (plugin) first
-  try {
-    execSync('docker compose version', { stdio: 'pipe' });
-    return { cmd: 'docker', args: ['compose'] };
-  } catch (e) {
-    // Fall back to standalone docker-compose
-    try {
-      execSync('docker-compose --version', { stdio: 'pipe' });
-      return { cmd: 'docker-compose', args: [] };
-    } catch (e2) {
-      // Default to plugin style, let it fail with helpful error
-      return { cmd: 'docker', args: ['compose'] };
-    }
-  }
+  const runtime = getRuntime();
+  return { cmd: runtime.composeCmd, args: runtime.args };
 }
 
 /**
@@ -38,26 +74,60 @@ function generateSecret() {
 }
 
 /**
- * Check if Docker is installed and running
- * @returns {Promise<{installed: boolean, running: boolean, error?: string}>}
+ * Check if Docker or Podman is installed and running
+ * @returns {Promise<{installed: boolean, running: boolean, error?: string, runtime: 'docker'|'podman'|'none'}>}
  */
 export async function checkDocker() {
-  // Check if docker command exists
-  const installed = await new Promise((resolve) => {
+  // Check for Podman first (preferred)
+  const podmanInstalled = await new Promise((resolve) => {
+    const check = spawn('podman', ['--version']);
+    check.on('close', (code) => resolve(code === 0));
+    check.on('error', () => resolve(false));
+  });
+
+  if (podmanInstalled) {
+    // Check if Podman machine is running (macOS) or daemon is running (Linux)
+    const running = await new Promise((resolve) => {
+      const check = spawn('podman', ['ps', '-q'], {
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+      check.on('close', (code) => resolve(code === 0));
+      check.on('error', () => resolve(false));
+    });
+
+    if (!running) {
+      return {
+        installed: true,
+        running: false,
+        runtime: 'podman',
+        error: 'Podman is installed but not running. Run: podman machine start'
+      };
+    }
+
+    return {
+      installed: true,
+      running: true,
+      runtime: 'podman'
+    };
+  }
+
+  // Check for Docker
+  const dockerInstalled = await new Promise((resolve) => {
     const check = spawn('docker', ['--version']);
     check.on('close', (code) => resolve(code === 0));
     check.on('error', () => resolve(false));
   });
 
-  if (!installed) {
+  if (!dockerInstalled) {
     return {
       installed: false,
       running: false,
-      error: 'Docker not found. Please install Docker from https://docs.docker.com/engine/install/'
+      runtime: 'none',
+      error: 'Neither Podman nor Docker found. Please install Podman from https://podman.io/'
     };
   }
 
-  // Check if Docker daemon is running by running a simple command
+  // Check if Docker daemon is running
   const running = await new Promise((resolve) => {
     const check = spawn('docker', ['ps', '-q'], {
       stdio: ['pipe', 'pipe', 'pipe']
@@ -70,13 +140,15 @@ export async function checkDocker() {
     return {
       installed: true,
       running: false,
+      runtime: 'docker',
       error: 'Docker is installed but not running. Please start Docker Desktop.'
     };
   }
 
   return {
     installed: true,
-    running: true
+    running: true,
+    runtime: 'docker'
   };
 }
 
