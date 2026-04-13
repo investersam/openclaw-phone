@@ -6,7 +6,7 @@ version: '3.8'
 
 services:
   drachtio:
-    image: drachtio/drachtio-server:latest
+    image: docker.io/drachtio/drachtio-server:latest
     container_name: drachtio
     restart: unless-stopped
     network_mode: host
@@ -22,7 +22,7 @@ services:
     # - 9022: Admin/App Port
 
   freeswitch:
-    image: drachtio/drachtio-freeswitch-mrf:latest
+    image: docker.io/drachtio/drachtio-freeswitch-mrf:latest
     container_name: freeswitch
     restart: unless-stopped
     network_mode: host
