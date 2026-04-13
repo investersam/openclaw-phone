@@ -4,22 +4,38 @@ import { promisify } from 'util';
 const execAsync = promisify(exec);
 
 /**
- * Check if Docker is installed and accessible
+ * Check if Docker or Podman is installed and accessible
  * @returns {Promise<object>} Prerequisite check result
- * @property {boolean} installed - True if Docker is available
- * @property {string} [version] - Docker version if installed
+ * @property {boolean} installed - True if container runtime is available
+ * @property {string} [runtime] - 'docker' or 'podman'
+ * @property {string} [version] - Version if installed
  * @property {string} [error] - Error message if check failed
  * @property {string} [installUrl] - Installation URL if not installed
  */
 export async function checkDocker() {
+  // Check for Podman first (preferred)
   try {
-    // Check if docker command exists
+    const { stdout: podmanWhich } = await execAsync('which podman');
+    if (podmanWhich.trim()) {
+      const { stdout: versionOutput } = await execAsync('podman --version');
+      return {
+        installed: true,
+        runtime: 'podman',
+        version: versionOutput.trim()
+      };
+    }
+  } catch (e) {
+    // Podman not found, try Docker
+  }
+
+  // Check for Docker
+  try {
     const { stdout: whichOutput } = await execAsync('which docker');
 
     if (!whichOutput.trim()) {
       return {
         installed: false,
-        installUrl: 'https://docs.docker.com/engine/install/'
+        installUrl: 'https://podman.io/getting-started/installation'
       };
     }
 
@@ -29,56 +45,63 @@ export async function checkDocker() {
 
     return {
       installed: true,
+      runtime: 'docker',
       version: version
     };
   } catch (error) {
-    // Docker not found or not executable
+    // Neither found
     return {
       installed: false,
-      error: error.message,
-      installUrl: 'https://docs.docker.com/engine/install/'
+      error: 'Neither Podman nor Docker found',
+      installUrl: 'https://podman.io/getting-started/installation'
     };
   }
 }
 
 /**
- * Check if docker-compose or docker compose is available
+ * Check if docker-compose or podman-compose is available
  * @returns {Promise<object>} Prerequisite check result
  * @property {boolean} installed - True if compose is available
  * @property {string} [version] - Compose version if installed
- * @property {string} [method] - 'plugin' or 'standalone'
+ * @property {string} [method] - 'podman-compose', 'plugin' or 'standalone'
  * @property {string} [error] - Error message if check failed
  * @property {string} [installUrl] - Installation URL if not installed
  */
 export async function checkDockerCompose() {
-  // Try docker compose (plugin) first
+  // Try podman-compose first (for Podman users)
   try {
-    const { stdout } = await execAsync('docker compose version');
-    const version = stdout.trim();
-
+    const { stdout } = await execAsync('podman-compose --version');
     return {
       installed: true,
-      version: version,
-      method: 'plugin'
+      version: stdout.trim(),
+      method: 'podman-compose'
     };
-  } catch (pluginError) {
-    // Plugin not found, try standalone docker-compose
+  } catch (podmanComposeError) {
+    // podman-compose not found, try docker compose (plugin)
     try {
-      const { stdout } = await execAsync('docker-compose --version');
-      const version = stdout.trim();
-
+      const { stdout } = await execAsync('docker compose version');
       return {
         installed: true,
-        version: version,
-        method: 'standalone'
+        version: stdout.trim(),
+        method: 'plugin'
       };
-    } catch (standaloneError) {
-      // Neither available
-      return {
-        installed: false,
-        error: 'Neither docker compose nor docker-compose found',
-        installUrl: 'https://docs.docker.com/compose/install/'
-      };
+    } catch (pluginError) {
+      // Plugin not found, try standalone docker-compose
+      try {
+        const { stdout } = await execAsync('docker-compose --version');
+        return {
+          installed: true,
+          version: stdout.trim(),
+          method: 'standalone'
+        };
+      } catch (standaloneError) {
+        // Neither available
+        return {
+          installed: false,
+          error: 'No compose tool found (podman-compose, docker compose, or docker-compose)',
+          installUrl: 'https://podman.io/getting-started/installation'
+        };
+      }
     }
   }
 }
@@ -90,23 +113,22 @@ export async function checkDockerCompose() {
 export async function checkPiPrerequisites() {
   const checks = [];
 
-  // Check Docker
+  // Check container runtime (Docker or Podman)
   const dockerResult = await checkDocker();
   checks.push({
-    name: 'Docker',
+    name: dockerResult.runtime === 'podman' ? 'Podman' : 'Docker',
     installed: dockerResult.installed,
     version: dockerResult.version,
     error: dockerResult.error,
     installUrl: dockerResult.installUrl
   });
 
-  // Check Docker Compose
+  // Check Compose (podman-compose or docker-compose)
   const composeResult = await checkDockerCompose();
   checks.push({
-    name: 'Docker Compose',
+    name: composeResult.method === 'podman-compose' ? 'Podman Compose' : 'Docker Compose',
     installed: composeResult.installed,
     version: composeResult.version,
-    method: composeResult.method,
     error: composeResult.error,
     installUrl: composeResult.installUrl
   });
