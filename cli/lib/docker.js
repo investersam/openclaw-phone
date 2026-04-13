@@ -363,19 +363,21 @@ export async function startContainers() {
       if (code === 0) {
         resolve();
       } else {
-        // AC22: Detect ARM64 image pull failure
+        // Detect ARM64 image pull failure
         if (output.includes('no matching manifest') ||
             output.includes('image with reference') && output.includes('arm64')) {
+          const runtime = getRuntime().runtime;
           const error = new Error(
-            'ARM64 Docker image pull failed.\n\n' +
-            'Try manually pulling images:\n' +
-            '  docker pull drachtio/drachtio-server:latest\n' +
-            '  docker pull drachtio/drachtio-freeswitch-mrf:latest\n\n' +
+            'ARM64 container image pull failed.\n\n' +
+            `Try manually pulling images:\n` +
+            `  ${runtime} pull drachtio/drachtio-server:latest\n` +
+            `  ${runtime} pull drachtio/drachtio-freeswitch-mrf:latest\n\n` +
             'If images are not available for ARM64, you may need to build them locally.'
           );
           reject(error);
         } else {
-          reject(new Error(`Docker compose failed (exit ${code}): ${output}`));
+          const runtime = getRuntime().runtime;
+          reject(new Error(`${runtime} compose failed (exit ${code}): ${output}`));
         }
       }
     });
@@ -417,7 +419,8 @@ export async function stopContainers() {
       if (code === 0) {
         resolve();
       } else {
-        reject(new Error(`Docker compose down failed (exit ${code}): ${output}`));
+        const runtime = getRuntime().runtime;
+        reject(new Error(`${runtime} compose down failed (exit ${code}): ${output}`));
       }
     });
   });
