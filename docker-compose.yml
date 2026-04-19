@@ -5,6 +5,8 @@ version: '3.8'
 # in SDP, making RTP unreachable from external callers.
 
 services:
+  # Option 1: drachtio (default, simpler)
+  # Comment out this section to use Kamailio instead
   drachtio:
     image: docker.io/drachtio/drachtio-server:latest
     container_name: drachtio
@@ -20,6 +22,22 @@ services:
     # Ports (for reference - host mode doesn't need port mapping):
     # - 5060: SIP UDP/TCP
     # - 9022: Admin/App Port
+
+  # Option 2: Kamailio (advanced, more flexible)
+  # Uncomment this section to use Kamailio instead of drachtio
+  # kamailio:
+  #   image: kamailio/kamailio-ci:latest
+  #   container_name: kamailio
+  #   restart: unless-stopped
+  #   network_mode: host
+  #   volumes:
+  #     - ./kamailio/kamailio-simple.cfg:/etc/kamailio/kamailio.cfg:ro
+  #   command: >
+  #     kamailio
+  #     -f /etc/kamailio/kamailio.cfg
+  #     -D
+  #   # Ports (for reference):
+  #   # - 5060: SIP UDP/TCP
 
   freeswitch:
     image: docker.io/drachtio/drachtio-freeswitch-mrf:latest
@@ -57,8 +75,11 @@ services:
       # Device configurations
       - ./voice-app/config:/app/config
     depends_on:
-      - drachtio
       - freeswitch
+      # When using drachtio:
+      - drachtio
+      # When using Kamailio (comment out drachtio above, uncomment below):
+      # - kamailio
     # Ports (for reference):
     # - 3000: HTTP API
     # - 3001: WebSocket for audio streaming

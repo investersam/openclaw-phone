@@ -13,13 +13,15 @@
     "axios": "^1.6.0",
     "debug": "^4.3.4",
     "dotenv": "^16.3.1",
-    "drachtio-fsmrf": "^3.0.0",
-    "drachtio-srf": "^4.5.0",
     "express": "^4.18.2",
     "openai": "^4.20.0",
     "uuid": "^9.0.0",
     "wavefile": "^11.0.0",
     "ws": "^8.14.0"
+  },
+  "optionalDependencies": {
+    "drachtio-fsmrf": "^3.0.0",
+    "drachtio-srf": "^4.5.0"
   },
   "engines": {
     "node": ">=18.0.0"
